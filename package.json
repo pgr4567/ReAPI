@@ -11,7 +11,11 @@
         "prepublish": "tsc"
     },
     "devDependencies": {
+        "@types/mongodb": "^3.6.18",
         "typescript": "^4.3.2"
     },
-    "author": "pgr4567"
+    "author": "pgr4567",
+    "dependencies": {
+        "mongodb": "^3.6.9"
+    }
 }
