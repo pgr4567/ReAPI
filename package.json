@@ -1,0 +1,17 @@
+{
+    "name": "@pgr4567/reapi",
+    "version": "1.0.0",
+    "description": "My personal API for webservers that use a database. You probably don't want to use this xd",
+    "license": "MIT",
+    "repository": "github:pgr4567/ReAPI",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "prepublish": "tsc"
+    },
+    "devDependencies": {
+        "typescript": "^4.3.2"
+    },
+    "author": "pgr4567"
+}
