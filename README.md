@@ -91,7 +91,7 @@ Use these rules to create a condition that enables said access right when true.
 ### Making requests to endpoints
 - Every request is a POST request that must have all data in the body.
 - Content-Type header must be application/json.
-- `user_id` and `user_token` is required in every request.
+- `username` and `user_token` is required in every request.
 - `query` is required when you want to target existing documents. The format is: 
     - Separate clauses must be separated by `&`.
     - Clause statements must be separated by `|`.
