@@ -305,10 +305,6 @@ export class ReMongo {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
-                    if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription)) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
-                        return;
-                    }
                     let insertData: { [key: string]: any } = req.body.document_data;
                     for (let field in collectionDescription["fields"]) {
                         if (!(field in insertData)) {
