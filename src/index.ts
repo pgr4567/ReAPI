@@ -218,7 +218,7 @@ export class ReMongo {
         });
         this.#express.post(`/${this.#databaseName}/${collectionName}/edit`, async (req, res) => {
             let user: (Cursor<any> | undefined) | CollectionDocument = this.#database?.collection("Users").find({$and:[{username: req.body.username}, {token: req.body.user_token}]});
-            if (user !== undefined && user !== null) {
+            if (user !== undefined && user !== null && (await user.count()) !== 0) {
                 user = (await user.next()) as CollectionDocument;
             }
             if (req.body.document_data === undefined) {
@@ -261,7 +261,7 @@ export class ReMongo {
         });
         this.#express.post(`/${this.#databaseName}/${collectionName}/delete`, async (req, res) => {
             let user: (Cursor<any> | undefined) | CollectionDocument = this.#database?.collection("Users").find({$and:[{username: req.body.username}, {token: req.body.user_token}]});
-            if (user !== undefined && user !== null) {
+            if (user !== undefined && user !== null && (await user.count()) !== 0) {
                 user = (await user.next()) as CollectionDocument;
             }
             const temp = await this.#handleRequest(req, res, collection, collectionDescription, "delete"); 
@@ -287,7 +287,7 @@ export class ReMongo {
         });
         this.#express.post(`/${this.#databaseName}/${collectionName}/insert`, async (req, res) => {
             let user: (Cursor<any> | undefined) | CollectionDocument = this.#database?.collection("Users").find({$and:[{username: req.body.username}, {token: req.body.user_token}]});
-            if (user !== undefined && user !== null) {
+            if (user !== undefined && user !== null && (await user.count()) !== 0) {
                 user = (await user.next()) as CollectionDocument;
             }
             const temp = await this.#handleRequest(req, res, collection, collectionDescription, "insert"); 
@@ -487,7 +487,7 @@ export class ReMongo {
     async #handleRequest(req: any, res: any, collection: Collection, collectionDescription: CollectionDescription, accessType: CollectionDescriptionAccessKey): Promise<CollectionDocument[] | boolean> {
         // Get user document
         let user: (Cursor<any> | undefined) | CollectionDocument = this.#database?.collection("Users").find({$and:[{username: req.body.username}, {token: req.body.user_token}]});
-        if (user === undefined || user == null) {
+        if (user === undefined || user == null || (await user.count()) == 0) {
             if (collectionDescription["name"] !== "Users") {
                 res.status(403).send(JSON.stringify(this.#unauthorized));
                 return false;
