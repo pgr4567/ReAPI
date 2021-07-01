@@ -655,6 +655,18 @@ export class ReMongo {
             }});
             res.status(200).send(JSON.stringify(this.#requestFulfilled));
         });
+        this.#express.post("/verifyToken", async (req, res) => {
+            if (req.body.username === undefined || req.body.token === undefined) {
+                res.status(400).send(JSON.stringify(this.#malformedRequest));
+                return;
+            }
+            let user = await this.#database?.collection("Users").findOne({$and: [{username: req.body.username}, {token: req.body.token}]});
+            if (user === undefined) {
+                res.status(400).send(JSON.stringify(this.#malformedRequest));
+                return;
+            }
+            res.status(200).send(JSON.stringify(this.#requestFulfilled));
+        });
 
         this.#express.post("*", (_, res) => {
             res.status(404).send(JSON.stringify(this.#resNotFound));
