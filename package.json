@@ -1,6 +1,6 @@
 {
     "name": "@pgr4567/reapi",
-    "version": "2.0.5",
+    "version": "2.0.6",
     "description": "My personal API for webservers that use a database. You probably don't want to use this xd",
     "license": "MIT",
     "repository": "github:pgr4567/ReAPI",
