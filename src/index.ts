@@ -32,7 +32,7 @@ export class ReMongo {
     #collections: { [name:string]: CollectionDescription | null } = {};
 
     #express: express.Application | null = null;
-    readonly #saltRounds: number = 20000;
+    readonly #saltRounds: number = 100;
     readonly #tokenLength: number = 128;
     readonly #idLength: number = 64;
     readonly #token_disallow_minutes: number = 60 * 8;
