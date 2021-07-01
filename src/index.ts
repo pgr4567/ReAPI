@@ -2,6 +2,7 @@ import { Db, MongoClient, Cursor, Collection } from "mongodb";
 import express from "express";
 import bcrypt from 'bcrypt';
 import moment from 'moment';
+import cors from 'cors';
 
 export type CollectionFieldValue = {
     "type": CollectionFieldValueType,
@@ -68,6 +69,7 @@ export class ReMongo {
         this.#client = new MongoClient(connectionString, { useNewUrlParser: true, useUnifiedTopology: true });
         this.#express = express();
         this.#express.use(express.json());
+        this.#express.use(cors());
         this.#express.listen(port, hostname, () => {
             console.log(`ReAPI listening at ${hostname}:${port}.`);
         });          

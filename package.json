@@ -18,8 +18,10 @@
     },
     "author": "pgr4567",
     "dependencies": {
+        "@types/cors": "^2.8.10",
         "@types/moment": "^2.13.0",
         "bcrypt": "^5.0.1",
+        "cors": "^2.8.5",
         "express": "^4.17.1",
         "moment": "^2.29.1",
         "mongodb": "^3.6.9"
