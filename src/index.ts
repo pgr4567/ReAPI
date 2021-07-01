@@ -487,7 +487,7 @@ export class ReMongo {
     async #handleRequest(req: any, res: any, collection: Collection, collectionDescription: CollectionDescription, accessType: CollectionDescriptionAccessKey): Promise<CollectionDocument[] | boolean> {
         // Get user document
         let user: (Cursor<any> | undefined) | CollectionDocument = this.#database?.collection("Users").find({$and:[{username: req.body.username}, {token: req.body.user_token}]});
-        if (user === undefined || user === null) {
+        if (user === undefined || user == null) {
             if (collectionDescription["name"] !== "Users") {
                 res.status(403).send(JSON.stringify(this.#unauthorized));
                 return false;
@@ -563,7 +563,7 @@ export class ReMongo {
                     expressions[i] = collection["fields"][expressionSides[i].substr(1)];
                     break;
                 case "&":
-                    if (user === null) {
+                    if (user == null) {
                         return false;
                     }
                     expressions[i] = user[expressionSides[i].substr(1)];
@@ -618,7 +618,7 @@ export class ReMongo {
                 return;
             }
             let user = await this.#database?.collection("Users").findOne({$and: [{username: req.body.username}]});
-            if (user === undefined || user === null) {
+            if (user === undefined || user == null) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
@@ -646,7 +646,7 @@ export class ReMongo {
                 return;
             }
             let user = await this.#database?.collection("Users").findOne({$and: [{username: req.body.username}, {token: req.body.token}]});
-            if (user === undefined || user === null) {
+            if (user === undefined || user == null) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
@@ -663,7 +663,7 @@ export class ReMongo {
                 return;
             }
             let user = await this.#database?.collection("Users").findOne({$and: [{username: req.body.username}, {token: req.body.token}]});
-            if (user === undefined || user === null) {
+            if (user === undefined || user == null) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
