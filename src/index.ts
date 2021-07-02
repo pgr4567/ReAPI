@@ -105,6 +105,9 @@ export class ReMongo {
             if ("id" in collectionDescription["fields"]) {
                 throw new Error("The id field is added to every CollectionDescription automatically.");
             }
+            if (collectionDescription.name !== collectionName) {
+                throw new Error("The collection names must be identical!");
+            }
             collectionDescription["fields"]["id"] = {
                 "type": "string",
                 "required": false,
