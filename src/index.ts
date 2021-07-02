@@ -10,6 +10,7 @@ export type CollectionFieldValue = {
     "unique": boolean,
     "readonly": boolean,
     "secret": boolean,
+    "insertable": boolean,
     "preInsert"?: (value: any, user?: CollectionDocument) => any,
     "preRead"?: (value: any) => any,
     "preDelete"?: (value: any, user?: CollectionDocument) => any,
@@ -107,7 +108,8 @@ export class ReMongo {
                 "required": false,
                 "unique": true,
                 "readonly": true,
-                "secret": false
+                "secret": false,
+                "insertable": false
             };
         }
         this.#collections[collectionName] = collectionDescription;
@@ -130,14 +132,16 @@ export class ReMongo {
                 "required": true,
                 "unique": true,
                 "readonly": false,
-                "secret": false
+                "secret": false,
+                "insertable": true
             };
             customUserDataCollection["fields"]["id"] = {
                 "type": "string",
                 "required": false,
                 "unique": true,
                 "readonly": true,
-                "secret": false
+                "secret": false,
+                "insertable": false
             };
             customUserDataCollection["fields"]["password_hash"] = {
                 "type": "string",
@@ -145,6 +149,7 @@ export class ReMongo {
                 "unique": false,
                 "readonly": true,
                 "secret": true,
+                "insertable": true,
                 "preInsert": async (password: string) => {
                     return await bcrypt.hash(password, this.#saltRounds);
                 },
@@ -157,14 +162,16 @@ export class ReMongo {
                 "required": false,
                 "unique": false,
                 "readonly": true,
-                "secret": true
+                "secret": true,
+                "insertable": false
             };
             customUserDataCollection["fields"]["token_disallow"] = {
                 "type": "string",
                 "required": false,
                 "unique": false,
                 "readonly": true,
-                "secret": true
+                "secret": true,
+                "insertable": false
             };
             customUserDataCollection["access"] = {
                 "read": "$id=&id",
@@ -305,6 +312,10 @@ export class ReMongo {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
+                    if (this.#queryHasNotInsertable(req.body.document_data, collectionDescription)) {
+                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                        return; 
+                    }
                     let insertData: { [key: string]: any } = req.body.document_data;
                     for (let field in collectionDescription["fields"]) {
                         if (!(field in insertData)) {
@@ -406,6 +417,20 @@ export class ReMongo {
             }
         }
         return true;
+    }
+    /**
+     * Detects whether the data to be inserted contains fields that cannot be inserted into.
+     * @param query The query to check.
+     * @param collectionDescription The CollectionDescription of the collection to check for.
+     * @returns Whether the checks passed.
+     */
+    #queryHasNotInsertable(query: { [key: string]: any }, collectionDescription: CollectionDescription): boolean {
+        for (let field in query) {
+            if (!collectionDescription["fields"][field]["insertable"]) {
+                return true;
+            }
+        }
+        return false;
     }
     /**
      * Generates a random string of the inputted length to use for ids/tokens.
