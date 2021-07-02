@@ -15,7 +15,11 @@ export type CollectionFieldValue = {
     "preDelete"?: (value: any, user?: CollectionDocument) => any,
     "preEdit"?: (value: any, user?: CollectionDocument) => any
 };
-export type CollectionFieldValueType = "string" | "number";
+
+export type CollectionFieldValueType = {
+    valueType: "string" | "number" | { [key: string]: CollectionFieldValueType },
+    valueForm: "single" | "array"
+};
 export type CollectionDescriptionAccessKey = "read" | "delete" | "edit" | "info" | "insert";
 export type CollectionDescription = {
     "name": string,
@@ -109,7 +113,10 @@ export class ReMongo {
                 throw new Error("The collection names must be identical!");
             }
             collectionDescription["fields"]["id"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": false,
                 "unique": true,
                 "readonly": true,
@@ -132,21 +139,30 @@ export class ReMongo {
         else {
             customUserDataCollection["name"] = "Users";
             customUserDataCollection["fields"]["username"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": true,
                 "unique": true,
                 "readonly": false,
                 "secret": false
             };
             customUserDataCollection["fields"]["id"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": false,
                 "unique": true,
                 "readonly": true,
                 "secret": false
             };
             customUserDataCollection["fields"]["password_hash"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": true,
                 "unique": false,
                 "readonly": false,
@@ -159,14 +175,20 @@ export class ReMongo {
                 }
             };
             customUserDataCollection["fields"]["token"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": false,
                 "unique": false,
                 "readonly": true,
                 "secret": true
             };
             customUserDataCollection["fields"]["token_disallow"] = {
-                "type": "string",
+                "type": {
+                    "valueType": "string",
+                    "valueForm": "single"
+                },
                 "required": false,
                 "unique": false,
                 "readonly": true,
@@ -260,7 +282,7 @@ export class ReMongo {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (!this.#queryHasCorrectTypes(req.body.document_data, collectionDescription)) {
+            if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValueTypes(collectionDescription))) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
@@ -268,7 +290,7 @@ export class ReMongo {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            let insertData = await this.#prepareInsertData(req.body.document_data, collection, collectionDescription);
+            let insertData = await this.#prepareInsertData(req.body.document_data, collection);
             for (let field in insertData) {
                 try {
                     insertData[field] = await collectionDescription["fields"][field]["preEdit"]!(insertData[field], user);
@@ -332,7 +354,7 @@ export class ReMongo {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
-                    if (!this.#queryHasCorrectTypes(req.body.document_data, collectionDescription)) {
+                    if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValueTypes(collectionDescription))) {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
@@ -350,7 +372,7 @@ export class ReMongo {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return;
                     }
-                    insertData = await this.#prepareInsertData(insertData, collection, collectionDescription);
+                    insertData = await this.#prepareInsertData(insertData, collection);
                     for (let field in insertData) {
                         if (collectionDescription["fields"][field]["preInsert"] !== undefined) {
                             try {
@@ -395,11 +417,11 @@ export class ReMongo {
      * @param collection The collection to prepare for.
      * @returns The prepared data.
      */
-    async #prepareInsertData(data: { [key: string]: any }, collection: Collection, collectionDescription: CollectionDescription): Promise<{ [key: string]: any }> {
+    async #prepareInsertData(data: { [key: string]: any }, collection: Collection): Promise<{ [key: string]: any }> {
         for (let field in data) {
             if (field === "id") {
                 let setId = this.#generateRandomString(this.#idLength);
-                let result = this.#queryCollection(collection, `id|${setId}`, collectionDescription);
+                let result = collection.find({id: setId});
                 let condition = result !== undefined;
                 if (condition) {
                     condition = (await (result as Cursor<CollectionDocument>).count()) !== 0;
@@ -407,7 +429,7 @@ export class ReMongo {
                 data[field] = setId;
                 while (condition) {
                     setId = this.#generateRandomString(this.#idLength);
-                    result = this.#queryCollection(collection, `id|${setId}`, collectionDescription);
+                    result = collection.find({id: setId});
                     condition = result !== undefined;
                     if (condition) {
                         condition = (await (result as Cursor<CollectionDocument>).count()) !== 0;
@@ -431,7 +453,9 @@ export class ReMongo {
                 return false;
             }
             if (collectionDescription["fields"][field]["unique"]) {
-                const existingEntries = this.#queryCollection(collection, `${field}|${query[field]}`, collectionDescription);
+                const queryDB: any = {};
+                queryDB[field] = query[field];
+                const existingEntries = collection.find(queryDB);
                 if (existingEntries !== undefined) {
                     const count = await existingEntries.count();
                     if (count !== 0) {
@@ -457,6 +481,18 @@ export class ReMongo {
         return result;
     }
     /**
+     * Maps a CollectionDescription to a dictionary of CollectionFieldValueTypes for use in {@link #queryHasCorrectTypes()}.
+     * @param collectionDescription The CollectionDescription to iterate over.
+     * @returns The generated dictionary of CollectionFieldValueTypes.
+     */
+    #extractCollectionFieldValueTypes(collectionDescription: CollectionDescription): { [key: string]: CollectionFieldValueType } {
+        const result: { [key: string]: CollectionFieldValueType } = { };
+        for (let field in collectionDescription.fields) {
+            result[field] = collectionDescription.fields[field].type;
+        }
+        return result;
+    }
+    /**
      * Detects whether a query has the fields to be inserted into a collection.
      * @param query The query to check.
      * @param collectionDescription The CollectionDescription of the collection to check the query for.
@@ -478,16 +514,22 @@ export class ReMongo {
      * @param collectionDescription The CollectionDescription of the collection to check the query for.
      * @returns Whether the checks passed.
      */
-    #queryHasCorrectTypes(query: { [key: string]: any }, collectionDescription: CollectionDescription): boolean {
+    #queryHasCorrectTypes(query: { [key: string]: any }, collectionDescriptionFields: { [key: string]: CollectionFieldValueType }): boolean {
         for (let field in query) {
-            if (collectionDescription["fields"][field]["type"] === "string") {
-                if (typeof query[field] !== "string") {
-                    return false;
+            if (collectionDescriptionFields[field].valueType === "string" || collectionDescriptionFields[field].valueType === "number") {
+                if (collectionDescriptionFields[field].valueForm === "single") {
+                    if (typeof query[field] !== collectionDescriptionFields[field].valueType) {
+                        return false;
+                    }
+                } else {
+                    for (let subField in query[field]) {
+                        if (typeof query[field][subField] !== collectionDescriptionFields[field].valueType) {
+                            return false;
+                        }
+                    }
                 }
-            } else if (collectionDescription["fields"][field]["type"] === "number") {
-                if (typeof query[field] !== "number") {
-                    return false;
-                }
+            } else {
+                this.#queryHasCorrectTypes(query[field], collectionDescriptionFields[field].valueType as { [key: string]: CollectionFieldValueType });
             }
         }
         return true;
@@ -540,7 +582,7 @@ export class ReMongo {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return false;
             }
-            result = this.#queryCollection(collection, req.body.query, collectionDescription);
+            result = collection.find(req.body.query);
             if (result === undefined) {
                 res.status(404).send(JSON.stringify(this.#resNotFound));
                 return false;
@@ -590,9 +632,6 @@ export class ReMongo {
                     }
                     expressions[i] = document[expressionSides[i].substr(1)];
                     break;
-                case "%":
-                    expressions[i] = collection["fields"][expressionSides[i].substr(1)];
-                    break;
                 case "&":
                     if (user == null) {
                         return false;
@@ -602,30 +641,6 @@ export class ReMongo {
             }
         }
         return expressions[0] == expressions[1];
-    }
-    /**
-     * Used internally to query a collection.
-     * @param collection The collection to query.
-     * @param queryString The query string, multiple clauses separated by `&`. The clause sides are separated by `|`.
-     * @returns The queried ressources or undefined.
-     */
-    #queryCollection(collection: Collection, queryString: string, collectionDescription: CollectionDescription): Cursor<CollectionDocument> | undefined {
-        const selectors: {}[] = queryString.split("&").map((v: string): {} => {
-            let type = collectionDescription["fields"][v.split("|")[0]]["type"];
-            let value: any = v.split("|")[1];
-            switch (type) {
-                case "string":
-                    value = value;
-                    break;
-                case "number":
-                    value = Number(value)
-                    break;
-            }
-            return {
-                [v.split("|")[0]]: value
-            };
-        });
-        return collection.find({$and: selectors});
     }
     /**
      * Call to initialize ReAPI. Setsup all collection and express endpoints.

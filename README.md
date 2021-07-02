@@ -83,9 +83,8 @@ run();
 When creating a collection, the required access fields `read`, `edit`, `insert`, `info`, `delete` have the following format:
 - The only supported operant is `=`.
 - `$` references the fields of the document.
-- `%` references the fields of the collection.
 - `&` references the fields of the user document.
-
+- Additional special values are `@everyone`, `@noone` and `@everyuser`.
 Use these rules to create a condition that enables said access right when true.
 
 ### Making requests to endpoints
