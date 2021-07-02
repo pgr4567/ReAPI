@@ -177,6 +177,31 @@ export class ReMongo {
             this.#collections["Users"] = customUserDataCollection;
         }
     }
+
+    /**
+     * This generates type definitions of the inserted collection to aid with type checking in the client application.
+     * @returns The generated type definitions.
+     */
+    public createCollectionTypes(): string {
+        let result = "";
+        for (let c in this.#collections) {
+            if (this.#collections[c] === null) {
+                continue;
+            }
+            const collection = this.#collections[c] as CollectionDescription;
+            result += `export type ${c} = {\n\t`;
+            for (let field in collection.fields) {
+                let fieldStr = field;
+                if (!collection.fields[field].required && collection.fields[field].preInsert == undefined) {
+                    fieldStr += "?";
+                }
+                fieldStr += `: ${collection.fields[field].type};\n\t`;
+                result += fieldStr;
+            }
+            result += "};\n\n";
+        }
+        return result;
+    }
     /**
      * Creates all needed endpoints for a given collection.
      * @param collectionName The name of the collection to create methods for.
