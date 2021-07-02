@@ -211,7 +211,7 @@ export class ReMongo {
      * @returns The generated type definitions.
      */
     public createCollectionTypes(): string {
-        let result = "";
+        let result = '';
         for (let c in this.#collections) {
             if (this.#collections[c] === null) {
                 continue;
@@ -219,15 +219,45 @@ export class ReMongo {
             const collection = this.#collections[c] as CollectionDescription;
             result += `export type ${c.slice(0, -1)} = {\n`;
             for (let field in collection.fields) {
-                let fieldStr = `\t${field}`;
+                result += `\t${field}`;
                 if (!collection.fields[field].required && collection.fields[field].preInsert == undefined) {
-                    fieldStr += "?";
+                    result += '?';
                 }
-                fieldStr += `: ${collection.fields[field].type};\n`;
-                result += fieldStr;
+                if (collection.fields[field].type.valueType === "string" || collection.fields[field].type.valueType === "number") {
+                    result += `: ${collection.fields[field].type.valueType}`;
+                } else {
+                    result += `: ${this.#addRecursiveCollectionTypes(collection.fields[field].type.valueType as { [key: string]: CollectionFieldValueType }, 1)}`;
+                }
+                if (collection.fields[field].type.valueForm === "array") {
+                    result += '[]';
+                }
+                result += ';\n';
             }
-            result += "};\n\n";
+            result += '};\n\n';
         }
+        return result;
+    }
+    /**
+     * Used internally to generate type string recursively.
+     * @param valueTypes The types still to add.
+     * @param level How deep are we into recursion?
+     * @returns The type string.
+     */
+    #addRecursiveCollectionTypes(valueTypes: { [key: string]: CollectionFieldValueType }, level: number): string {
+        let result = '{\n\t' + '\t'.repeat(level);
+        for (let k in valueTypes) {
+            if (valueTypes[k].valueType === "string" || valueTypes[k].valueType === "number") {
+                result += `${k}: ${valueTypes[k].valueType}`;
+            } else {
+                result += `${k}: ${this.#addRecursiveCollectionTypes(valueTypes[k].valueType as { [key: string]: CollectionFieldValueType }, level + 1)}`;
+            }
+            if (valueTypes[k].valueForm === "array") {
+                result += '[]';
+            }
+            result += ';\n\t' + '\t'.repeat(level);
+        }
+        result = result.substring(0, result.length - 1);
+        result += '}';
         return result;
     }
     /**
