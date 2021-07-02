@@ -94,10 +94,13 @@ export class ReMongo {
     }
     /**
      * Use to add/remove a collection from the API. The id field is added automatically.
-     * @param collectionName The name of the collection to set.
+     * @param collectionName The name of the collection to set. This must end with an 's'.
      * @param collectionDescription The data that should be associated with the collection. If this is null, the collection will be ignored.
      */
     public setCollection<T extends string> (collectionName: T extends "Users" ? never : T, collectionDescription: CollectionDescription | null): void {
+        if (!collectionName.endsWith("s")) {
+            throw new Error("Collection names must end with an 's'.");
+        }
         if (collectionDescription !== null) {
             if ("id" in collectionDescription["fields"]) {
                 throw new Error("The id field is added to every CollectionDescription automatically.");
@@ -189,13 +192,13 @@ export class ReMongo {
                 continue;
             }
             const collection = this.#collections[c] as CollectionDescription;
-            result += `export type ${c} = {\n\t`;
+            result += `export type ${c.slice(0, -1)} = {\n`;
             for (let field in collection.fields) {
-                let fieldStr = field;
+                let fieldStr = `\t${field}`;
                 if (!collection.fields[field].required && collection.fields[field].preInsert == undefined) {
                     fieldStr += "?";
                 }
-                fieldStr += `: ${collection.fields[field].type};\n\t`;
+                fieldStr += `: ${collection.fields[field].type};\n`;
                 result += fieldStr;
             }
             result += "};\n\n";
