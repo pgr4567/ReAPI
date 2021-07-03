@@ -99,5 +99,7 @@ Use these rules to create a condition that enables said access right when true.
 ## TODO
 - Add more database types.
 - Add more authentication methods.
-- Add more value types:
-  - Enums
+- Improve documentation: 
+  - id field is reserved on collection level and always gets populated with a random id,
+  - id fields in deeper levels are not populated
+  - if a parent element sets a field, the child elements inherit it.

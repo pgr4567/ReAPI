@@ -17,7 +17,7 @@ export type CollectionFieldValue = {
 };
 
 export type CollectionFieldValueType = {
-    valueType: "string" | "number" | "union" | { [key: string]: CollectionFieldValueType },
+    valueType: "string" | "number" | "union" | { [key: string]: CollectionFieldValue },
     valueForm: "single" | "array",
     unionTypes?: string[]
 };
@@ -124,7 +124,7 @@ export class ReMongo {
                 "secret": false
             };
             for (let f in collectionDescription["fields"]) {
-                this.#checkFieldsRecursively(collectionDescription.fields[f].type);
+                this.#checkFieldsRecursively(collectionDescription.fields[f]);
             }
         }
         this.#collections[collectionName] = collectionDescription;
@@ -206,9 +206,7 @@ export class ReMongo {
                 "insert": "@everyone"
             };
             for (let f in customUserDataCollection["fields"]) {
-                if (customUserDataCollection["fields"][f].type.valueType === "union" && customUserDataCollection["fields"][f].type.unionTypes === undefined) {
-                    throw new Error("If the valueType is union, the unionTypes must be set!");
-                }
+                this.#checkFieldsRecursively(customUserDataCollection.fields[f]);
             }
             this.#collections["Users"] = customUserDataCollection;
         }
@@ -236,7 +234,7 @@ export class ReMongo {
                 } else if (collection.fields[field].type.valueType === "union") {
                     result += `: ${collection.fields[field].type.unionTypes?.reduce((acc, curr, index) => index == 1 ? `"${acc}" | "${curr}"` : `${acc} | "${curr}"`)}`;
                 } else {
-                    result += `: ${this.#addRecursiveCollectionTypes(collection.fields[field].type.valueType as { [key: string]: CollectionFieldValueType }, 1)}`;
+                    result += `: ${this.#addRecursiveCollectionTypes(collection.fields[field].type.valueType as { [key: string]: CollectionFieldValue }, 1)}`;
                 }
                 if (collection.fields[field].type.valueForm === "array") {
                     result += '[]';
@@ -247,13 +245,17 @@ export class ReMongo {
         }
         return result;
     }
-    #checkFieldsRecursively(fields: CollectionFieldValueType) {
-        if (fields.valueType === "union" && fields.unionTypes == undefined) {
+    /**
+     * Checks if the collection fields have a union type definition if their type is of type union.
+     * @param fields The CollectionFields to check.
+     */
+    #checkFieldsRecursively(fields: CollectionFieldValue) {
+        if (fields.type.valueType === "union" && fields.type.unionTypes == undefined) {
             throw new Error("If the valueType is union, the unionTypes must be set!");
         }
-        if (fields.valueType !== "string" && fields.valueType !== "number") {
-            for (let v in fields.valueType as { [key: string]: CollectionFieldValueType }) {
-                this.#checkFieldsRecursively((fields.valueType as { [key: string]: CollectionFieldValueType })[v] as CollectionFieldValueType);
+        if (fields.type.valueType !== "string" && fields.type.valueType !== "number") {
+            for (let v in fields.type.valueType as { [key: string]: CollectionFieldValue }) {
+                this.#checkFieldsRecursively((fields.type.valueType as { [key: string]: CollectionFieldValue })[v] as CollectionFieldValue);
             }
         }
     }
@@ -263,17 +265,17 @@ export class ReMongo {
      * @param level How deep are we into recursion?
      * @returns The type string.
      */
-    #addRecursiveCollectionTypes(valueTypes: { [key: string]: CollectionFieldValueType }, level: number): string {
+    #addRecursiveCollectionTypes(valueTypes: { [key: string]: CollectionFieldValue }, level: number): string {
         let result = '{\n\t' + '\t'.repeat(level);
         for (let k in valueTypes) {
-            if (valueTypes[k].valueType === "string" || valueTypes[k].valueType === "number") {
-                result += `${k}: ${valueTypes[k].valueType}`;
-            } else if (valueTypes[k].valueType === "union") {
-                result += `${k}: ${valueTypes[k].unionTypes?.reduce((acc, curr, index) => index == 1 ? `"${acc}" | "${curr}"` : `${acc} | "${curr}"`)}`;
+            if (valueTypes[k].type.valueType === "string" || valueTypes[k].type.valueType === "number") {
+                result += `${k}: ${valueTypes[k].type.valueType}`;
+            } else if (valueTypes[k].type.valueType === "union") {
+                result += `${k}: ${valueTypes[k].type.unionTypes?.reduce((acc, curr, index) => index == 1 ? `"${acc}" | "${curr}"` : `${acc} | "${curr}"`)}`;
             } else {
-                result += `${k}: ${this.#addRecursiveCollectionTypes(valueTypes[k].valueType as { [key: string]: CollectionFieldValueType }, level + 1)}`;
+                result += `${k}: ${this.#addRecursiveCollectionTypes(valueTypes[k].type.valueType as { [key: string]: CollectionFieldValue }, level + 1)}`;
             }
-            if (valueTypes[k].valueForm === "array") {
+            if (valueTypes[k].type.valueForm === "array") {
                 result += '[]';
             }
             result += ';\n\t' + '\t'.repeat(level);
@@ -330,15 +332,15 @@ export class ReMongo {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (!(await this.#queryFulfillsUniqueFields(req.body.document_data, collectionDescription, collection))) {
+            if (!(await this.#queryFulfillsUniqueFields(req.body.document_data, collectionDescription.fields, collection))) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValueTypes(collectionDescription))) {
+            if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription)) {
+            if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription.fields)) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
@@ -402,15 +404,15 @@ export class ReMongo {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return;
                     }
-                    if (!this.#queryHasRequiredFields(req.body.document_data, collectionDescription)) {
+                    if (!this.#queryHasRequiredFields(req.body.document_data, collectionDescription.fields)) {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
-                    if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValueTypes(collectionDescription))) {
+                    if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
-                    if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription)) {
+                    if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription.fields)) {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
@@ -420,7 +422,7 @@ export class ReMongo {
                             insertData[field] = null;
                         }
                     }
-                    if (!(await this.#queryFulfillsUniqueFields(insertData, collectionDescription, collection))) {
+                    if (!(await this.#queryFulfillsUniqueFields(insertData, collectionDescription.fields, collection))) {
                         res.status(400).send(JSON.stringify(this.#malformedRequest));
                         return;
                     }
@@ -465,7 +467,6 @@ export class ReMongo {
     /**
      * Prepares data to insert/edit a collection.
      * @param data The data to prepare
-     * @param collectionDescription The CollectionDescription of the Collection to prepare for.
      * @param collection The collection to prepare for.
      * @returns The prepared data.
      */
@@ -495,16 +496,20 @@ export class ReMongo {
     /**
      * Detects whether the data to be inserted/edited fulfills the unique criteria. 
      * @param query The query to check.
-     * @param collectionDescription The CollectionDescription of the collection to check for.
+     * @param collectionFields The CollectionFields of the collection to check for.
      * @param collection The collection to check for.
+     * @param override Whether a parent element is unique.
      * @returns Whether the checks passed.
      */
-    async #queryFulfillsUniqueFields(query: { [key: string]: any }, collectionDescription: CollectionDescription, collection: Collection): Promise<boolean> {
+    async #queryFulfillsUniqueFields(query: { [key: string]: any }, collectionFields: { [key: string]: CollectionFieldValue }, collection: Collection, override: boolean = false): Promise<boolean> {
         for (let field in query) {
-            if (!(field in collectionDescription["fields"])) {
+            if (!(field in collectionFields)) {
                 return false;
             }
-            if (collectionDescription["fields"][field]["unique"]) {
+            if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "number" && collectionFields[field].type.valueType !== "union") {
+                return await this.#queryFulfillsUniqueFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collection, override || collectionFields[field]["unique"]);
+            }
+            if (collectionFields[field]["unique"] || override) {
                 const queryDB: any = {};
                 queryDB[field] = query[field];
                 const existingEntries = collection.find(queryDB);
@@ -537,22 +542,26 @@ export class ReMongo {
      * @param collectionDescription The CollectionDescription to iterate over.
      * @returns The generated dictionary of CollectionFieldValueTypes.
      */
-    #extractCollectionFieldValueTypes(collectionDescription: CollectionDescription): { [key: string]: CollectionFieldValueType } {
-        const result: { [key: string]: CollectionFieldValueType } = { };
+    #extractCollectionFieldValues(collectionDescription: CollectionDescription): { [key: string]: CollectionFieldValue } {
+        const result: { [key: string]: CollectionFieldValue } = { };
         for (let field in collectionDescription.fields) {
-            result[field] = collectionDescription.fields[field].type;
+            result[field] = collectionDescription.fields[field];
         }
         return result;
     }
     /**
      * Detects whether a query has the fields to be inserted into a collection.
      * @param query The query to check.
-     * @param collectionDescription The CollectionDescription of the collection to check the query for.
+     * @param collectionFields The CollectionDescription of the collection to check the query for.
+     * @param override Whether a parent element is required.
      * @returns Whether the checks passed.
      */
-    #queryHasRequiredFields(query: { [key: string]: any }, collectionDescription: CollectionDescription): boolean {
-        for (let field in collectionDescription["fields"]) {
-            if (collectionDescription["fields"][field]["required"]) {
+    #queryHasRequiredFields(query: { [key: string]: any }, collectionFields: { [key: string]: CollectionFieldValue }, override: boolean = false): boolean {
+        for (let field in collectionFields) {
+            if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "number" && collectionFields[field].type.valueType !== "union") {
+                return this.#queryHasRequiredFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].required || override);
+            }
+            if (collectionFields[field].required || override) {
                 if (!(field in query)) {
                     return false;
                 }
@@ -563,27 +572,27 @@ export class ReMongo {
     /**
      * Detects whether a query has the correct types to be inserted into a collection.
      * @param query The query to check.
-     * @param collectionDescription The CollectionDescription of the collection to check the query for.
+     * @param collectionDescriptionFields The CollectionDescription of the collection to check the query for.
      * @returns Whether the checks passed.
      */
-    #queryHasCorrectTypes(query: { [key: string]: any }, collectionDescriptionFields: { [key: string]: CollectionFieldValueType }): boolean {
+    #queryHasCorrectTypes(query: { [key: string]: any }, collectionDescriptionFields: { [key: string]: CollectionFieldValue }): boolean {
         for (let field in query) {
-            if (collectionDescriptionFields[field].valueType === "string" || collectionDescriptionFields[field].valueType === "number") {
-                if (collectionDescriptionFields[field].valueForm === "single") {
-                    if (typeof query[field] !== collectionDescriptionFields[field].valueType) {
+            if (collectionDescriptionFields[field].type.valueType === "string" || collectionDescriptionFields[field].type.valueType === "number") {
+                if (collectionDescriptionFields[field].type.valueForm === "single") {
+                    if (typeof query[field] !== collectionDescriptionFields[field].type.valueType) {
                         return false;
                     }
                 } else {
                     for (let subField in query[field]) {
-                        if (typeof query[field][subField] !== collectionDescriptionFields[field].valueType) {
+                        if (typeof query[field][subField] !== collectionDescriptionFields[field].type.valueType) {
                             return false;
                         }
                     }
                 }
-            } else if (collectionDescriptionFields[field].valueType === "union") {
-                if (collectionDescriptionFields[field].valueForm === "single") {
+            } else if (collectionDescriptionFields[field].type.valueType === "union") {
+                if (collectionDescriptionFields[field].type.valueForm === "single") {
                     let hit = false;
-                    for (let union of collectionDescriptionFields[field].unionTypes!) {
+                    for (let union of collectionDescriptionFields[field].type.unionTypes!) {
                         if (query[field] === union) {
                             hit = true;
                             break;
@@ -595,7 +604,7 @@ export class ReMongo {
                 } else {
                     for (let subField in query[field]) {
                         let hit = false;
-                        for (let union of collectionDescriptionFields[field].unionTypes!) {
+                        for (let union of collectionDescriptionFields[field].type.unionTypes!) {
                             if (query[field][subField] === union) {
                                 hit = true;
                                 break;
@@ -607,7 +616,7 @@ export class ReMongo {
                     }
                 }
             } else {
-                this.#queryHasCorrectTypes(query[field], collectionDescriptionFields[field].valueType as { [key: string]: CollectionFieldValueType });
+                this.#queryHasCorrectTypes(query[field], collectionDescriptionFields[field].type.valueType as { [key: string]: CollectionFieldValue });
             }
         }
         return true;
@@ -616,11 +625,15 @@ export class ReMongo {
      * Detects whether a query tries to change a readonly field.
      * @param query The query to check.
      * @param collectionDescription The CollectionDescription of the collection to check the query for.
+     * @param override Whether a parent element is readonly.
      * @returns Whether the checks passed.
      */
-    #queryContainsReadonlyFields(query: { [key: string]: any }, collectionDescription: CollectionDescription): boolean {
+    #queryContainsReadonlyFields(query: { [key: string]: any }, collectionFields: { [key: string]: CollectionFieldValue }, override: boolean = false): boolean {
         for (let field in query) {
-            if (collectionDescription["fields"][field]["readonly"] === true) {
+            if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "string") {
+                return this.#queryContainsReadonlyFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].readonly || override);
+            }
+            if (collectionFields[field].readonly || override) {
                 return true;
             }
         }
@@ -644,7 +657,7 @@ export class ReMongo {
                 return false;
             }
             else {
-                return this.#checkAccess(collectionDescription["access"][accessType] as string, null, null, collectionDescription);
+                return this.#checkAccess(collectionDescription["access"][accessType] as string, null, null);
             }
         }
         user = (await user.next()) as CollectionDocument;
@@ -669,7 +682,7 @@ export class ReMongo {
             const accessibleDocuments: CollectionDocument[] = [];
             while (!result.isClosed() && await result.hasNext()) {
                 const document = await result.next() as CollectionDocument;
-                if (this.#checkAccess(collectionDescription["access"][accessType] as string, user, document, collectionDescription)) {
+                if (this.#checkAccess(collectionDescription["access"][accessType] as string, user, document)) {
                     accessibleDocuments.push(document);
                 }
             }
@@ -677,7 +690,7 @@ export class ReMongo {
         }
         // Check access normally.
         else {
-            return this.#checkAccess(collectionDescription["access"][accessType] as string, user, result, collectionDescription);
+            return this.#checkAccess(collectionDescription["access"][accessType] as string, user, result);
         }
     }
     /**
@@ -688,7 +701,7 @@ export class ReMongo {
      * @param collection The collection to check in.
      * @returns Whether the user has access or not.
      */
-    #checkAccess(accessString: string, user: CollectionDocument | null, document: CollectionDocument | null, collection: CollectionDescription): boolean {
+    #checkAccess(accessString: string, user: CollectionDocument | null, document: CollectionDocument | null): boolean {
         if (accessString.startsWith("@")) {
             if (accessString === "@everyone") {
                 return true;
