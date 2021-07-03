@@ -253,7 +253,7 @@ export class ReMongo {
         if (fields.type.valueType === "union" && fields.type.unionTypes == undefined) {
             throw new Error("If the valueType is union, the unionTypes must be set!");
         }
-        if (fields.type.valueType !== "string" && fields.type.valueType !== "number") {
+        if (fields.type.valueType !== "string" && fields.type.valueType !== "number" && fields.type.valueType !== "union") {
             for (let v in fields.type.valueType as { [key: string]: CollectionFieldValue }) {
                 this.#checkFieldsRecursively((fields.type.valueType as { [key: string]: CollectionFieldValue })[v] as CollectionFieldValue);
             }
@@ -332,11 +332,11 @@ export class ReMongo {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (!(await this.#queryFulfillsUniqueFields(req.body.document_data, collectionDescription.fields, collection))) {
+            if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
-            if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
+            if (!(await this.#queryFulfillsUniqueFields(req.body.document_data, collectionDescription.fields, collection))) {
                 res.status(400).send(JSON.stringify(this.#malformedRequest));
                 return;
             }
@@ -401,19 +401,19 @@ export class ReMongo {
             if (typeof temp === "boolean") {
                 if (temp) {
                     if (req.body.document_data === undefined) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                        res.status(401).send(JSON.stringify(this.#malformedRequest));
                         return;
                     }
-                    if (!this.#queryHasRequiredFields(req.body.document_data, collectionDescription.fields)) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                    if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
+                        res.status(403).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
-                    if (!this.#queryHasCorrectTypes(req.body.document_data, this.#extractCollectionFieldValues(collectionDescription))) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                    if (!this.#queryHasRequiredFields(req.body.document_data, collectionDescription.fields)) {
+                        res.status(402).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
                     if (this.#queryContainsReadonlyFields(req.body.document_data, collectionDescription.fields)) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                        res.status(404).send(JSON.stringify(this.#malformedRequest));
                         return; 
                     }
                     let insertData: { [key: string]: any } = req.body.document_data;
@@ -423,7 +423,7 @@ export class ReMongo {
                         }
                     }
                     if (!(await this.#queryFulfillsUniqueFields(insertData, collectionDescription.fields, collection))) {
-                        res.status(400).send(JSON.stringify(this.#malformedRequest));
+                        res.status(405).send(JSON.stringify(this.#malformedRequest));
                         return;
                     }
                     insertData = await this.#prepareInsertData(insertData, collection);
@@ -507,7 +507,13 @@ export class ReMongo {
                 return false;
             }
             if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "number" && collectionFields[field].type.valueType !== "union") {
-                return await this.#queryFulfillsUniqueFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collection, override || collectionFields[field]["unique"]);
+                if (collectionFields[field].type.valueForm === "array") {
+                    for (let x in query[field]) {
+                        return await this.#queryFulfillsUniqueFields(query[field][x], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collection, override || collectionFields[field]["unique"]);
+                    }
+                } else {
+                    return await this.#queryFulfillsUniqueFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collection, override || collectionFields[field]["unique"]);
+                }
             }
             if (collectionFields[field]["unique"] || override) {
                 const queryDB: any = {};
@@ -559,7 +565,13 @@ export class ReMongo {
     #queryHasRequiredFields(query: { [key: string]: any }, collectionFields: { [key: string]: CollectionFieldValue }, override: boolean = false): boolean {
         for (let field in collectionFields) {
             if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "number" && collectionFields[field].type.valueType !== "union") {
-                return this.#queryHasRequiredFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].required || override);
+                if (collectionFields[field].type.valueForm === "array") {
+                    for (let x in query[field]) {
+                        return this.#queryHasRequiredFields(query[field][x], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].required || override);
+                    }
+                } else {
+                    return this.#queryHasRequiredFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].required || override);
+                }
             }
             if (collectionFields[field].required || override) {
                 if (!(field in query)) {
@@ -583,6 +595,9 @@ export class ReMongo {
                         return false;
                     }
                 } else {
+                    if (!Array.isArray(query[field])) {
+                        return false;
+                    }
                     for (let subField in query[field]) {
                         if (typeof query[field][subField] !== collectionDescriptionFields[field].type.valueType) {
                             return false;
@@ -602,6 +617,9 @@ export class ReMongo {
                         return false;
                     }
                 } else {
+                    if (!Array.isArray(query[field])) {
+                        return false;
+                    }
                     for (let subField in query[field]) {
                         let hit = false;
                         for (let union of collectionDescriptionFields[field].type.unionTypes!) {
@@ -616,7 +634,16 @@ export class ReMongo {
                     }
                 }
             } else {
-                this.#queryHasCorrectTypes(query[field], collectionDescriptionFields[field].type.valueType as { [key: string]: CollectionFieldValue });
+                if (collectionDescriptionFields[field].type.valueForm === "single") {
+                    return this.#queryHasCorrectTypes(query[field], collectionDescriptionFields[field].type.valueType as { [key: string]: CollectionFieldValue });
+                } else {
+                    if (!Array.isArray(query[field])) {
+                        return false;
+                    }
+                    for (let x in query[field]) {
+                        return this.#queryHasCorrectTypes(query[field][x], collectionDescriptionFields[field].type.valueType as { [key: string]: CollectionFieldValue });
+                    }
+                }
             }
         }
         return true;
@@ -630,8 +657,14 @@ export class ReMongo {
      */
     #queryContainsReadonlyFields(query: { [key: string]: any }, collectionFields: { [key: string]: CollectionFieldValue }, override: boolean = false): boolean {
         for (let field in query) {
-            if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "string") {
-                return this.#queryContainsReadonlyFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].readonly || override);
+            if (collectionFields[field].type.valueType !== "string" && collectionFields[field].type.valueType !== "number" && collectionFields[field].type.valueType !== "union") {
+                if (collectionFields[field].type.valueForm === "array") {
+                    for (let x in query[field]) {
+                        return this.#queryContainsReadonlyFields(query[field][x], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].readonly || override);
+                    }
+                } else {
+                    return this.#queryContainsReadonlyFields(query[field], collectionFields[field].type.valueType as { [key: string]: CollectionFieldValue }, collectionFields[field].readonly || override);
+                }
             }
             if (collectionFields[field].readonly || override) {
                 return true;
