@@ -252,7 +252,9 @@ export class ReMongo {
             throw new Error("If the valueType is union, the unionTypes must be set!");
         }
         if (fields.valueType !== "string" && fields.valueType !== "number") {
-            this.#checkFieldsRecursively(fields.valueType as CollectionFieldValueType);
+            for (let v in fields.valueType as { [key: string]: CollectionFieldValueType }) {
+                this.#checkFieldsRecursively((fields.valueType as { [key: string]: CollectionFieldValueType })[v] as CollectionFieldValueType);
+            }
         }
     }
     /**
