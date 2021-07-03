@@ -17,8 +17,9 @@ export type CollectionFieldValue = {
 };
 
 export type CollectionFieldValueType = {
-    valueType: "string" | "number" | { [key: string]: CollectionFieldValueType },
-    valueForm: "single" | "array"
+    valueType: "string" | "number" | "union" | { [key: string]: CollectionFieldValueType },
+    valueForm: "single" | "array",
+    unionTypes?: string[]
 };
 export type CollectionDescriptionAccessKey = "read" | "delete" | "edit" | "info" | "insert";
 export type CollectionDescription = {
@@ -122,6 +123,11 @@ export class ReMongo {
                 "readonly": true,
                 "secret": false
             };
+            for (let f in collectionDescription["fields"]) {
+                if (collectionDescription["fields"][f].type.valueType === "union" && collectionDescription["fields"][f].type.unionTypes === undefined) {
+                    throw new Error("If the valueType is union, the unionTypes must be set!");
+                }
+            }
         }
         this.#collections[collectionName] = collectionDescription;
     }
@@ -201,7 +207,11 @@ export class ReMongo {
                 "info": "@everyone",
                 "insert": "@everyone"
             };
-
+            for (let f in customUserDataCollection["fields"]) {
+                if (customUserDataCollection["fields"][f].type.valueType === "union" && customUserDataCollection["fields"][f].type.unionTypes === undefined) {
+                    throw new Error("If the valueType is union, the unionTypes must be set!");
+                }
+            }
             this.#collections["Users"] = customUserDataCollection;
         }
     }
@@ -225,6 +235,8 @@ export class ReMongo {
                 }
                 if (collection.fields[field].type.valueType === "string" || collection.fields[field].type.valueType === "number") {
                     result += `: ${collection.fields[field].type.valueType}`;
+                } else if (collection.fields[field].type.valueType === "union") {
+                    result += `: ${collection.fields[field].type.unionTypes?.reduce((acc, curr, index) => index == 1 ? `"${acc}" | "${curr}"` : `${acc} | "${curr}"`)}`;
                 } else {
                     result += `: ${this.#addRecursiveCollectionTypes(collection.fields[field].type.valueType as { [key: string]: CollectionFieldValueType }, 1)}`;
                 }
@@ -248,6 +260,8 @@ export class ReMongo {
         for (let k in valueTypes) {
             if (valueTypes[k].valueType === "string" || valueTypes[k].valueType === "number") {
                 result += `${k}: ${valueTypes[k].valueType}`;
+            } else if (valueTypes[k].valueType === "union") {
+                result += `${k}: ${valueTypes[k].unionTypes?.reduce((acc, curr, index) => index == 1 ? `"${acc}" | "${curr}"` : `${acc} | "${curr}"`)}`;
             } else {
                 result += `${k}: ${this.#addRecursiveCollectionTypes(valueTypes[k].valueType as { [key: string]: CollectionFieldValueType }, level + 1)}`;
             }
@@ -554,6 +568,32 @@ export class ReMongo {
                 } else {
                     for (let subField in query[field]) {
                         if (typeof query[field][subField] !== collectionDescriptionFields[field].valueType) {
+                            return false;
+                        }
+                    }
+                }
+            } else if (collectionDescriptionFields[field].valueType === "union") {
+                if (collectionDescriptionFields[field].valueForm === "single") {
+                    let hit = false;
+                    for (let union of collectionDescriptionFields[field].unionTypes!) {
+                        if (query[field] === union) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                    if (!hit) {
+                        return false;
+                    }
+                } else {
+                    for (let subField in query[field]) {
+                        let hit = false;
+                        for (let union of collectionDescriptionFields[field].unionTypes!) {
+                            if (query[field][subField] === union) {
+                                hit = true;
+                                break;
+                            }
+                        }
+                        if (!hit) {
                             return false;
                         }
                     }
