@@ -124,9 +124,7 @@ export class ReMongo {
                 "secret": false
             };
             for (let f in collectionDescription["fields"]) {
-                if (collectionDescription["fields"][f].type.valueType === "union" && collectionDescription["fields"][f].type.unionTypes === undefined) {
-                    throw new Error("If the valueType is union, the unionTypes must be set!");
-                }
+                this.#checkFieldsRecursively(collectionDescription.fields[f].type);
             }
         }
         this.#collections[collectionName] = collectionDescription;
@@ -248,6 +246,14 @@ export class ReMongo {
             result += '};\n\n';
         }
         return result;
+    }
+    #checkFieldsRecursively(fields: CollectionFieldValueType) {
+        if (fields.valueType === "union" && fields.unionTypes == undefined) {
+            throw new Error("If the valueType is union, the unionTypes must be set!");
+        }
+        if (fields.valueType !== "string" && fields.valueType !== "number") {
+            this.#checkFieldsRecursively(fields.valueType as CollectionFieldValueType);
+        }
     }
     /**
      * Used internally to generate type string recursively.
