@@ -8,7 +8,7 @@
 ![npm](https://img.shields.io/npm/dw/@pgr4567/reapi)
 ![GitHub top language](https://img.shields.io/github/languages/top/pgr4567/ReAPI)
 
-My personal API for webservers that use a database. You probably don't want to use this xd
+My personal API for webservers that use a database. You probably don't want to use this xd - I haven't even used it.
 
 ## Summary
 This projects enables me(and you) to create applications that use databases more easily. You simply have to populate ReAPI with your database schema and let it generate endpoints for all collections. These endpoints include authorization and authentication so you do not have to write the same backend every time you need a database. Just tell ReAPI that all users can create a Task, but only the Task owner can edit and delete it. ReAPI handles the rest and the client can simply call the endpoints, almost as if the client connected to the database directly.
